@@ -23,4 +23,20 @@ if (!requireNamespace("BiocManager", quietly = TRUE)){
 BiocManager::install(version='devel')
 BiocManager::install("DiffIsoR")
 ```
+# Usage Example
+# Load the IsoDiffR package
+library(IsoDiffR)
+
+# Load the data
+load("data/corneal.RData")
+
+# Display the data (example)
+head(gtf)  # Display the 'gtf' object
+head(isoform.0h)  # Display the 'isoform.0h' object
+
+# DEI search
+DEI = DEI <- getDEIso(seurat_obj = isoform.0h,gtf = gtf,subset_ident = unique(isoform.0h@meta.data$cluster),cluster_column = "cluster")
+
+# plot line plot taking isoform 'PB.17036.10 (KLF4~NNC)' as an example
+p<- plotDEIso(seurat_obj = isoform.0h,gtf = gtf,subset_ident = unique(isoform.0h@meta.data$cluster),cluster_column = "cluster",transcript_id = "PB.17036.10 (KLF4~NNC)")
 
