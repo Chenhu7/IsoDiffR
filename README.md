@@ -3,6 +3,7 @@
 ##### The analysis of long-read single-cell RNA sequencing(scRNA-seq) data at the RNA isoform level represents a frontier in current research, offering a transformative perspective beyond traditional gene expression analyses. Despite its potential, analytical methods specifically designed for this technology remain limited, highlighting the critical need for further methodological advancements to keep pace with its rapid development.
 
 ##### In response, we developed IsoDiffR,provides a significant resource for advancing our understanding of the complexity of single-cell gene expression and the diverse mechanisms underlying its regulation.
+
 # Installation
 
 ##### IsoDiffR can be installed via this command
@@ -23,7 +24,10 @@ if (!requireNamespace("BiocManager", quietly = TRUE)){
 BiocManager::install(version='devel')
 BiocManager::install("DiffIsoR")
 ```
-# Usage Example
+
+## Example Usage
+
+```
 # Load the IsoDiffR package
 library(IsoDiffR)
 
@@ -39,4 +43,6 @@ DEI = DEI <- getDEIso(seurat_obj = isoform.0h,gtf = gtf,subset_ident = unique(is
 
 # plot line plot taking isoform 'PB.17036.10 (KLF4~NNC)' as an example
 p<- plotDEIso(seurat_obj = isoform.0h,gtf = gtf,subset_ident = unique(isoform.0h@meta.data$cluster),cluster_column = "cluster",transcript_id = "PB.17036.10 (KLF4~NNC)")
+```
+
 
