@@ -120,4 +120,4 @@ The function `plotDEIso()` generates a line plot showing the expression pattern 
 ```
 p <- plotDEIso(seurat_obj = isoform.0h,gtf = gtf,subset_ident = unique(isoform.0h@meta.data$cluster),cluster_column = "cluster",transcript_id = "PB.17036.10 (KLF4~NNC)")
 ```
-![Image text](https://github.com/Eveqian98/IsoDiffR/blob/master/image/getDEIso.png)
+
