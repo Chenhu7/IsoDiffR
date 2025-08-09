@@ -124,3 +124,4 @@ multi.gene
  ![Image text](https://github.com/Eveqian98/IsoDiffR/blob/master/image/multi.gene.png)
 pair.major
 ![Image text](https://github.com/Eveqian98/IsoDiffR/blob/master/image/pair.major.png)
+
