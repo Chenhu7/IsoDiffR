@@ -106,6 +106,9 @@ getDEIso <- function(seurat_obj,cluster_column,subset_ident,gtf,
 
   # Match isoforms with their corresponding major isoforms
   n_iter <- nrow(markers)
+  if (n_iter == 0) {
+    stop("No candidate isoforms found after filtering. Check FindAllMarkers and GTF matching.")
+  }
   cat("\033[31mMatch isoforms with their corresponding major isoforms\033[0m\n")
   pb <- txtProgressBar(min = 0,max = n_iter, style = 3,width = 60,char = "+")
   for(i in 1:n_iter) {
