@@ -14,7 +14,7 @@ IsoDiffR can be installed via this command
 if (!requireNamespace("devtools", quietly = TRUE)){
     install.packages("devtools")
 }
-devtools::install_github("Eveqian98/IsoDiffR", build_vignettes = TRUE)
+devtools::install_github("Chenhu7/IsoDiffR", build_vignettes = TRUE)
 ```
 
 or 
