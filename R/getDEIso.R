@@ -88,21 +88,21 @@ getDEIso <- function(seurat_obj,cluster_column,subset_ident,gtf,
   markers <- FindAllMarkers(seurat_obj, only.pos = TRUE, min.pct = min.pct,logfc.threshold = 0)
   markers <- data.frame(gene = unique(markers$gene))
   colnames(markers)[1] <- "isoform"
+  cat("After FindAllMarkers ->", nrow(markers), "\n")
 
   # Match isoforms with their corresponding genes
   match_rows <- match(markers$isoform,gtf_trans$transcript_id)
   markers$gene_id <- gtf_trans$gene_id[match_rows]
   markers <- na.omit(markers)
+  cat("After match with GTF ->", sum(!is.na(match_rows)), "\n")
 
   # Remove genes with only one isoform
-  markers$relevant <- NA
-  for (i in 1:nrow(markers)) {
-    gene_id <- markers$gene_id[i]
-    relevant <- length(gtf_trans[gtf_trans$gene_id == gene_id, "transcript_id"])
-    markers$relevant[i] <- relevant
-  }
-  markers <- subset(markers,markers[,3] != 1)
-  markers <- markers[,-3]
+  markers$relevant <- sapply(markers$gene_id, function(gid) {
+    length(unique(gtf_trans$transcript_id[gtf_trans$gene_id == gid]))
+  })
+  markers <- subset(markers, relevant != 1)
+  cat("After remove single isoform genes ->", nrow(markers), "\n")
+  markers <- markers[, !names(markers) %in% "relevant"]
 
   # Match isoforms with their corresponding major isoforms
   n_iter <- nrow(markers)
