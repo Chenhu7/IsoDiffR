@@ -19,13 +19,15 @@
 #' @return A line plot displaying the expression levels of the input `transcript_id` isoform,
 #'   its corresponding major isoform, and the gene across different cell types.
 #' @export
-plotDEIso <- function(seurat_obj,gtf,cluster_column,subset_ident,transcript_id){
+plotDEIso <- function(seurat_obj,gtf,cluster_column,subset_ident,transcript_id,plot_nrow){
   if (!requireNamespace("Seurat", quietly = TRUE)) install.packages("Seurat")
   library(Seurat)
   if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
   library(dplyr)
   if (!requireNamespace("ggplot2", quietly = TRUE)) install.packages("dplyr")
   library(ggplot2)
+  if (!requireNamespace("patchwork", quietly = TRUE)) install.packages("dplyr")
+  library(patchwork)
 
   # ident using metadata column
   Idents(seurat_obj) <- seurat_obj@meta.data[[cluster_column]]
@@ -58,108 +60,168 @@ plotDEIso <- function(seurat_obj,gtf,cluster_column,subset_ident,transcript_id){
   raw_counts_isoform = GetAssayData(seurat_obj,assay = "RNA",layer = "counts")
 
   # Check if this isoform is the only isoform of the corresponding gene
-  gene_id = isoform$gene_id
-  isoform$revelant = length(gtf_trans[gtf_trans$gene_id == gene_id , "transcript_id"])
+  # gene_id = isoform$gene_id
+  # isoform$relevant = length(gtf_trans[gtf_trans$gene_id == gene_id , "transcript_id"])
+  gene_id <- unique(isoform$gene_id)
+  transcript_count <- gtf_trans %>%
+    group_by(gene_id) %>%
+    summarise(transcript_count = n(), .groups = 'drop')
+  isoform <- isoform %>%
+    left_join(transcript_count, by = "gene_id") %>%
+    rename(relevant = transcript_count)
 
-  if (isoform[1,3] == 1) {
-    stop("The isoform input is the only isoform of the corresponding gene")
+  ## plot
+  results_list <- list()
+
+  for (i in 1:nrow(isoform)) {
+
+    current_gene_id <- isoform$gene_id[i]
+    current_isoform_id <- isoform$isoform[i]
+    current_relevant <- isoform$relevant[i]
+
+    # check
+    if (current_relevant == 1) {
+      message_text <- paste0(
+        "The isoform '",
+        current_isoform_id,
+        "' is the only isoform of the corresponding gene (Gene ID: ",
+        current_gene_id,
+        ")"
+      )
+      print(message_text)
+      next
+    }
+
+    # relevant_transcripts
+    relevant_transcripts <- gtf_trans$transcript_id[gtf_trans$gene_id == current_gene_id]
+    relevant_transcripts <- na.omit(relevant_transcripts)
+    relevant_transcripts <- as.character(relevant_transcripts)
+    available_transcripts <- relevant_transcripts[relevant_transcripts %in% rownames(raw_counts_isoform)]
+
+    if (length(available_transcripts) == 0) {
+      warning(paste("No expression data for gene", current_gene_id))
+      next
+    }
+
+    # isoform
+    total_expressions <- rowSums(raw_counts_isoform[available_transcripts, , drop = FALSE])
+    major_isoform <- names(which.max(total_expressions))
+
+    # df
+    df <- data.frame(
+      Specified_Isoform = as.numeric(raw_counts_isoform[current_isoform_id, ]),
+      Major_Isoform = as.numeric(raw_counts_isoform[major_isoform, ])
+    )
+    rownames(df) <- colnames(raw_counts_isoform)
+    gene_expression <- colSums(raw_counts_isoform[available_transcripts, , drop = FALSE])
+    df$Gene_Total <- gene_expression
+
+    # colnames
+    if (current_isoform_id != major_isoform) {
+      colnames(df)[1] <- paste0("Specified_", current_isoform_id)
+      colnames(df)[2] <- paste0("Major_", major_isoform)
+    } else {
+      df <- df[, c(1, 3), drop = FALSE]
+      colnames(df)[1] <- paste0("Major_Specified_", current_isoform_id)
+    }
+
+    # annotation
+    match_rows <- match(rownames(df), rownames(seurat_obj@meta.data))
+    df$idents <- seurat_obj@meta.data[[cluster_column]][match_rows]
+
+    # CPM
+    col_num <- ncol(df)
+    idents <- levels(seurat_obj@active.ident)
+
+    for (ident in idents) {
+      subset_data <- subset(seurat_obj, idents = ident)
+      raw_count_subset <- subset_data@assays$RNA$counts
+      total_counts <- sum(raw_count_subset)
+      rows_to_change <- which(df[, col_num] == ident)
+      df[rows_to_change, 1:(col_num-1)] <- (df[rows_to_change, 1:(col_num-1)] / total_counts) * 1e6
+    }
+
+    results_list[[current_gene_id]] <- list(
+      data = df,
+      gene_id = current_gene_id,
+      isoform_id = current_isoform_id,
+      major_isoform = major_isoform
+    )
   }
 
-  # The corresponding major isoform for the input isoform
-  relevant_transcripts = gtf_trans[gtf_trans$gene_id == gene_id , "transcript_id"]
-  relevant_transcripts = unlist(na.omit(as.data.frame(relevant_transcripts)))
-  total_expressions = apply(raw_counts_isoform[relevant_transcripts,],1,sum)
-  isoform$major = names(which.max(total_expressions))
+  # polt function
+  plot_expression_profiles <- function(results_list) {
+    plots <- list()
 
-  # Check the expression levels of the isoform, the major isoform, and the gene separately
-  df = as.data.frame(raw_counts_isoform[transcript_id,])
-  colnames(df)[1] = isoform$isoform
-  df$major = raw_counts_isoform[isoform$major,]
-  colnames(df)[2] = isoform$major
-  Gene <- as.data.frame(raw_counts_isoform[relevant_transcripts, ])
-  Gene = colSums(Gene)
-  Gene_df = as.data.frame(Gene)
-  matched_rows <- match(rownames(df), rownames(Gene_df))
-  df$Gene <- Gene_df$Gene[matched_rows]
+    for (i in seq_along(results_list)) {
+      result <- results_list[[i]]
+      df <- result$data
+      dff <- aggregate(. ~ idents, data = df, sum)
+      dff_long <- tidyr::pivot_longer(dff,
+                                      cols = -idents,
+                                      names_to = "Gene",
+                                      values_to = "Expression")
+      df_long <- tidyr::pivot_longer(df,
+                                     cols = -idents,
+                                     names_to = "Gene",
+                                     values_to = "Expression")
 
-  #Differentiate between major isoform and diff isoform
-  if (isoform$isoform != isoform$major) {
-    colnames(df)[1] <- paste("Specified", colnames(df)[1], sep = "_")
-    colnames(df)[2] <- paste("Major", colnames(df)[2], sep = "_")
-  } else {
-    colnames(df)[1] <- paste("Major/Specified", colnames(df)[1], sep = "_")
-    df <- df[,-2]
+      df_se <- df_long %>%
+        group_by(idents, Gene) %>%
+        summarise(SE = sd(Expression, na.rm = TRUE) / sqrt(n()), .groups = 'drop')
+
+      dff_long <- dff_long %>%
+        left_join(df_se, by = c("idents", "Gene"))
+      dff_long$Expression <- log(dff_long$Expression + 1)
+      dff_long$SE <- log(dff_long$SE + 1)
+
+      # color
+      num_values <- length(unique(dff_long$Gene))
+      if (num_values == 2) {
+        mycol1 <- c('#1A0841', '#FF5959')
+      } else if (num_values == 3) {
+        mycol1 <- c('#1A0841', '#4F9DA6', '#FF5959')
+      } else {
+        mycol1 <- scales::hue_pal()(num_values)
+      }
+
+      # plot
+      p <- ggplot(dff_long, aes(x = idents, y = Expression, group = Gene, color = Gene)) +
+        geom_line(linewidth = 1.5) +
+        geom_point(size = 3) +
+        geom_errorbar(aes(ymin = Expression - SE, ymax = Expression + SE), width = 0.25, size = 0.75) +
+        scale_color_manual(values = mycol1) +
+        theme_minimal(base_size = 12) +
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 13),
+          axis.text.y = element_text(size = 12),
+          legend.position = 'top',
+          legend.justification = c(0, 1),
+          legend.text = element_text(size = 10),
+          legend.title = element_blank(),
+          panel.grid.major = element_line(colour = "gray80"),
+          panel.grid.minor = element_blank(),
+          axis.title = element_text(color = 'black', size = 16),
+          axis.line = element_line(linewidth = 1),
+          axis.ticks = element_line(linewidth = 1, color = 'black'),
+          legend.key.size = unit(20, "pt")
+        ) +
+        guides(color = guide_legend(nrow = num_values, byrow = TRUE)) +
+        labs(
+          x = "Cluster",
+          y = "log(CPM+1)",
+          title = paste("Gene:", result$gene_id)
+        )
+
+      plots[[result$gene_id]] <- p
+    }
+
+    return(plots)
   }
 
-  # Assign cells to identities
-  match_rows <- match(rownames(df), rownames(seurat_obj@meta.data))
-  df$idents <- seurat_obj@meta.data[["cluster"]][match_rows]
+  all_plots <- plot_expression_profiles(results_list)
 
-  # Convert counts to CPM
-  col_num = ncol(df)
+  combined_plot <- wrap_plots(all_plots, nrow = plot_nrow)
+  return(combined_plot)
 
-  idents <- levels(seurat_obj@active.ident)
-  for (ident in idents) {
-    subset_data <- subset(seurat_obj, idents = ident)
-    raw_count_subset <- subset_data@assays$RNA$counts
-    total_counts <- sum(raw_count_subset)
-    rows_to_change <- which(df[, col_num] == ident)
-    df[rows_to_change, 1:(col_num-1)] <- (df[rows_to_change, 1:(col_num-1)] / total_counts) * 1e6
-  }
-  # Calculate and add error bars.
-  dff = aggregate(. ~ idents, data = df, sum)
-
-  dff_long <- tidyr::pivot_longer(dff,
-                                  cols = -idents,
-                                  names_to = "Gene",
-                                  values_to = "Expression")
-  # Calculate the standard error.
-  df_long <- tidyr::pivot_longer(df,
-                                 cols = -idents,
-                                 names_to = "Gene",
-                                 values_to = "Expression")
-  df_se <- df_long %>%
-    group_by(idents, Gene) %>%
-    summarise(SE = sd(Expression, na.rm = TRUE) / sqrt(n()), .groups = 'drop')  # 计算标准误差
-
-  #### se + CPM
-  dff_long = dff_long %>% left_join(df_se,by = c("idents" = "idents" ,"Gene" = "Gene"))
-  dff_long$Expression = log(dff_long$Expression + 1)
-  dff_long$SE = log(dff_long$SE + 1)
-
-
-  # Check the number of values and set the number of legend rows
-  num_values <- length(unique(dff_long$Gene))
-  if (num_values == 2) {
-    mycol1 <- c('#1A0841','#FF5959')
-  } else if (num_values == 3) {
-    mycol1 <- c('#1A0841','#4F9DA6','#FF5959')
-  }
-
-  legend_rows <- num_values
-
-  # Plot a line chart.
-  p <- ggplot(dff_long, aes(x = idents, y = Expression, group = Gene, color = Gene)) +
-    geom_line(linewidth = 1.5) +
-    geom_point(size = 3) +
-    geom_errorbar(aes(ymin = Expression - SE, ymax = Expression + SE), width = 0.25, size = 0.75) +
-    scale_color_manual(values = mycol1) +
-    scale_fill_manual(values = mycol1) +
-    theme_minimal(base_size = 12) +
-    theme(
-      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 13),
-      axis.text.y = element_blank(),
-      legend.position = "top",
-      legend.text = element_text(size = 10),
-      legend.title = element_blank(),
-      panel.grid.major = element_line(colour = "gray80"),
-      panel.grid.minor = element_blank(),
-      axis.title = element_text(color = 'black', size = 16),
-      axis.line = element_line(linewidth = 1),
-      axis.ticks = element_line(linewidth = 1, color = 'black'),
-      legend.key.size = unit(20, "pt")
-    ) +
-    guides(color = guide_legend(reverse = F, nrow = legend_rows, byrow = TRUE)) +
-    labs(x = "Cluster", y = "log(CPM+1)")
 }
-
