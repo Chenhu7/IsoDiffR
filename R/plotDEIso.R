@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 #' Plot Isoform, Major Isoform, and Gene Expression Across Cell Types
 #'
 #' @param seurat_obj A Seurat object containing single-cell RNA-seq data.
