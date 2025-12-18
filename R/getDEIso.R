@@ -254,6 +254,7 @@ process_data <- function(seurat_obj, cluster_column, subset_ident, gtf,
 
 
 ## identify multil.gene multil.major
+#' @export
 identify_multi_DiffIso = function(markers,
                                   multi_cutoff = 0.2,ratio_range = 0.05){
   multi <- markers
@@ -321,6 +322,7 @@ identify_multi_DiffIso = function(markers,
 
 
 ## identify pair.gene pair.major
+#' @export
 identify_pair_DiffIso = function(markers, compare_ident,
                                  pair_cutoff = c(-1,0.9),ratio_difference = 0.1){
   
@@ -551,6 +553,7 @@ identify_pair_DiffIso = function(markers, compare_ident,
 }
 
 ## output
+#' @export
 output_DEIs <- function(multi_result,pair_result){
   multi.gene = multi_result$multi.gene
   multi.major = multi_result$multi.major
@@ -572,6 +575,7 @@ output_DEIs <- function(multi_result,pair_result){
   return(DEIso)
 }
 
+#' @export
 getDEIso <- function(seurat, gtf, subset_ident, cluster_column,
                      min.pct = 0.25, rate_cutoff = 0.1,
                      multi_cutoff = 0.2, ratio_range = 0.05,
